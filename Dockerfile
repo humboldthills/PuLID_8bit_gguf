@@ -3,6 +3,12 @@
 # ------------------------------------------------------------
 FROM runpod/worker-comfyui:5.5.1-base AS builder
 
+# Install GGUF node
+RUN git clone https://github.com/city96/ComfyUI-GGUF /comfyui/custom_nodes/ComfyUI-GGUF
+
+# Install PuLID Flux node
+RUN git clone https://github.com/ltdrdata/ComfyUI-PuLID-Flux /comfyui/custom_nodes/ComfyUI-PuLID-Flux
+
 # Create a persistent model cache directory
 ENV COMFYUI_MODEL_CACHE=/cache/models
 RUN mkdir -p $COMFYUI_MODEL_CACHE
