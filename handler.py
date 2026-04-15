@@ -15,7 +15,11 @@ COMFY_DIR = "/comfyui"
 COMFY_INPUT_DIR = f"{COMFY_DIR}/input"
 COMFY_LOG_PATH = "/tmp/comfyui.log"
 COMFY_PROCESS = None
-MODEL_ROOT = Path("/runpod-volume/models")
+MODEL_ROOT_CANDIDATES = [
+    Path("/runpod-volume/models"),
+    Path("/runpod-volume/workspace/ComfyUI/models"),
+    Path("/workspace/ComfyUI/models"),
+]
 EXPECTED_MODEL_FILES = {
     "UnetLoaderGGUF": {"unet_name": "flux1-dev-Q8_0.gguf", "filename": "flux1-dev-Q8_0.gguf"},
     "DualCLIPLoaderGGUF": {
@@ -33,26 +37,38 @@ EXPECTED_MODEL_FILES = {
 RUNTIME_DOWNLOADS = [
     (
         "https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q8_0.gguf",
-        MODEL_ROOT / "unet" / "flux1-dev-Q8_0.gguf",
+        Path("unet/flux1-dev-Q8_0.gguf"),
     ),
     (
         "https://huggingface.co/city96/t5-v1_1-xxl-encoder-gguf/resolve/main/t5-v1_1-xxl-encoder-Q8_0.gguf",
-        MODEL_ROOT / "clip" / "t5-v1_1-xxl-encoder-Q8_0.gguf",
+        Path("clip/t5-v1_1-xxl-encoder-Q8_0.gguf"),
     ),
     (
         "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/clip_l.safetensors",
-        MODEL_ROOT / "clip" / "clip_l.safetensors",
+        Path("clip/clip_l.safetensors"),
     ),
     (
         "https://huggingface.co/guozinan/PuLID/resolve/main/pulid_flux_v0.9.1.safetensors",
-        MODEL_ROOT / "pulid" / "pulid_flux_v0.9.1.safetensors",
+        Path("pulid/pulid_flux_v0.9.1.safetensors"),
     ),
     (
         "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors",
-        MODEL_ROOT / "vae" / "ae.safetensors",
+        Path("vae/ae.safetensors"),
     ),
 ]
 INSIGHTFACE_ZIP_URL = "https://huggingface.co/vladmandic/insightface-faceanalysis/resolve/main/antelopev2.zip"
+
+
+def get_model_root():
+    preferred = MODEL_ROOT_CANDIDATES[0]
+    expected_dirs = ("unet", "clip", "vae", "pulid", "insightface", "checkpoints")
+
+    for candidate in MODEL_ROOT_CANDIDATES:
+        if any((candidate / name).exists() for name in expected_dirs):
+            return candidate
+
+    preferred.mkdir(parents=True, exist_ok=True)
+    return preferred
 
 
 def download_file(url, destination):
@@ -63,10 +79,12 @@ def download_file(url, destination):
 
 
 def ensure_runtime_models():
-    for url, destination in RUNTIME_DOWNLOADS:
-        download_file(url, destination)
+    model_root = get_model_root()
 
-    insightface_root = MODEL_ROOT / "insightface"
+    for url, relative_destination in RUNTIME_DOWNLOADS:
+        download_file(url, model_root / relative_destination)
+
+    insightface_root = model_root / "insightface"
     antelope_dir = insightface_root / "models" / "antelopev2"
     if not antelope_dir.exists() or not any(antelope_dir.glob("*.onnx")):
         insightface_root.mkdir(parents=True, exist_ok=True)
