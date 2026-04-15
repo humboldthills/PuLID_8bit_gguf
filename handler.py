@@ -65,6 +65,30 @@ def get_available_files():
     return response.json()
 
 
+def coerce_available_files(data):
+    if isinstance(data, dict):
+        return data
+
+    if isinstance(data, list):
+        normalized = {}
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+
+            model_type = (
+                item.get("name")
+                or item.get("type")
+                or item.get("category")
+                or item.get("folder")
+            )
+            files = item.get("files") or item.get("models") or item.get("items") or []
+            if model_type:
+                normalized[model_type] = files
+        return normalized
+
+    return {}
+
+
 def normalize_filename(value, candidates):
     if not value or not candidates:
         return value
@@ -144,6 +168,7 @@ def convert_ui_workflow_to_prompt(workflow, object_info):
 
 
 def normalize_prompt_models(prompt, available_files):
+    available_files = coerce_available_files(available_files)
     diffusion_models = available_files.get("diffusion_models", [])
     vae_files = available_files.get("vae", [])
     text_encoders = available_files.get("text_encoders", []) or available_files.get("clip", [])
@@ -185,7 +210,14 @@ def build_prompt(workflow, object_info):
 def run_workflow(workflow):
     object_info = get_object_info()
     prompt = build_prompt(workflow, object_info)
-    normalize_prompt_models(prompt, get_available_files())
+    try:
+        normalize_prompt_models(prompt, get_available_files())
+    except Exception as e:
+        return {
+            "error": "Failed to normalize model filenames",
+            "details": str(e),
+            "log_tail": read_log_tail(),
+        }
 
     payload = {
         "prompt": prompt,
