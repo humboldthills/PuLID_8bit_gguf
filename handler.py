@@ -1,15 +1,25 @@
 import runpod
+import subprocess
 import requests
 import time
 import base64
-import os
 import json
+import os
 
 COMFY_URL = "http://127.0.0.1:8188"
 
+# Launch ComfyUI in background
+def launch_comfy():
+    subprocess.Popen(
+        ["python3", "main.py", "--listen", "0.0.0.0", "--port", "8188"],
+        cwd="/comfyui",
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+
 # Wait for ComfyUI to be ready
 def wait_for_comfy():
-    for _ in range(60):
+    for _ in range(120):
         try:
             requests.get(f"{COMFY_URL}/system_stats")
             return True
@@ -19,12 +29,11 @@ def wait_for_comfy():
 
 
 def run_workflow(workflow):
-    # 1. Submit workflow to ComfyUI
-    prompt = {"prompt": workflow}
-    res = requests.post(f"{COMFY_URL}/prompt", json=prompt).json()
+    # Submit workflow
+    res = requests.post(f"{COMFY_URL}/prompt", json={"prompt": workflow}).json()
     prompt_id = res["prompt_id"]
 
-    # 2. Poll for result
+    # Poll for completion
     while True:
         history = requests.get(f"{COMFY_URL}/history/{prompt_id}").json()
         if prompt_id in history:
@@ -33,7 +42,7 @@ def run_workflow(workflow):
 
     output = history[prompt_id]["outputs"]
 
-    # 3. Extract image(s)
+    # Extract images
     images = []
     for node_id, node_output in output.items():
         if "images" in node_output:
@@ -42,12 +51,10 @@ def run_workflow(workflow):
                 subfolder = img.get("subfolder", "")
                 folder_type = img.get("type", "output")
 
-                # 4. Fetch image bytes
                 img_bytes = requests.get(
                     f"{COMFY_URL}/view?filename={filename}&subfolder={subfolder}&type={folder_type}"
                 ).content
 
-                # 5. Convert to base64
                 images.append({
                     "filename": filename,
                     "base64": base64.b64encode(img_bytes).decode("utf-8")
@@ -59,11 +66,14 @@ def run_workflow(workflow):
 def handler(job):
     workflow = job["input"]["workflow"]
 
-    # Ensure ComfyUI is up
+    # Start ComfyUI
+    launch_comfy()
+
+    # Wait for it to be ready
     if not wait_for_comfy():
         return {"error": "ComfyUI did not start in time"}
 
-    # Run the workflow
+    # Run workflow
     images = run_workflow(workflow)
 
     return {
