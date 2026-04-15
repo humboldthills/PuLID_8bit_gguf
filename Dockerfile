@@ -9,7 +9,8 @@ ENV COMFY_CLI_CACHE_DIR=$COMFYUI_MODEL_CACHE
 RUN mkdir -p "$COMFYUI_MODEL_CACHE/unet" \
     "$COMFYUI_MODEL_CACHE/clip" \
     "$COMFYUI_MODEL_CACHE/vae" \
-    "$COMFYUI_MODEL_CACHE/pulid"
+    "$COMFYUI_MODEL_CACHE/pulid" \
+    "$COMFYUI_MODEL_CACHE/insightface/models"
 
 # Download into the exact model folders this ComfyUI build scans.
 RUN python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q8_0.gguf', '$COMFYUI_MODEL_CACHE/unet/flux1-dev-Q8_0.gguf')"
@@ -21,6 +22,32 @@ RUN python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggi
 RUN python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggingface.co/guozinan/PuLID/resolve/main/pulid_flux_v0.9.1.safetensors', '$COMFYUI_MODEL_CACHE/pulid/pulid_flux_v0.9.1.safetensors')"
 
 RUN python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors', '$COMFYUI_MODEL_CACHE/vae/ae.safetensors')"
+
+RUN python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggingface.co/tau-vision/insightface-antelopev2/resolve/main/antelopev2.zip', '$COMFYUI_MODEL_CACHE/insightface/antelopev2.zip')"
+
+RUN python3 - <<'PY'
+from pathlib import Path
+import shutil
+import zipfile
+
+root = Path("/cache/models/insightface")
+zip_path = root / "antelopev2.zip"
+extract_root = root / "models"
+target = extract_root / "antelopev2"
+
+target.mkdir(parents=True, exist_ok=True)
+with zipfile.ZipFile(zip_path) as zf:
+    zf.extractall(extract_root)
+
+# Some archives extract into models/antelopev2/antelopev2/*.onnx. Flatten that.
+nested = target / "antelopev2"
+if nested.exists() and nested.is_dir():
+    for item in nested.iterdir():
+        shutil.move(str(item), target / item.name)
+    nested.rmdir()
+
+zip_path.unlink(missing_ok=True)
+PY
 
 
 # ------------------------------------------------------------
