@@ -33,6 +33,9 @@ RUN curl -L "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_f
 # ------------------------------------------------------------
 FROM runpod/worker-comfyui:5.5.1-base
 
+# This RunPod image adds model search paths from /runpod-volume/models, so bake the
+# files there. Copying into /comfyui/models alone is not enough for validation.
+COPY --from=builder /cache/models /runpod-volume/models
 COPY --from=builder /cache/models /comfyui/models
 
 # Install custom nodes in the final image so ComfyUI can actually load them.
