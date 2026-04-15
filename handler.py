@@ -29,8 +29,25 @@ def wait_for_comfy():
 
 
 def run_workflow(workflow):
+    # Build correct ComfyUI payload
+    payload = {
+        "prompt": workflow.get("prompt", {}),
+        "client_id": workflow.get("client_id", "runpod")
+    }
+
     # Submit workflow
-    res = requests.post(f"{COMFY_URL}/prompt", json={"prompt": workflow}).json()
+    try:
+        res = requests.post(f"{COMFY_URL}/prompt", json=payload).json()
+    except Exception as e:
+        return {"error": "ComfyUI returned non‑JSON response"}
+
+    # Return ComfyUI error instead of crashing
+    if "prompt_id" not in res:
+        return {
+            "error": "ComfyUI rejected the workflow",
+            "response": res
+        }
+
     prompt_id = res["prompt_id"]
 
     # Poll for completion
@@ -61,7 +78,6 @@ def run_workflow(workflow):
                 })
 
     return images
-
 
 def handler(job):
     workflow = job["input"]["workflow"]
