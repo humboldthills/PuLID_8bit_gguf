@@ -36,7 +36,8 @@ FROM runpod/worker-comfyui:5.5.1-base
 # Copy cached models from builder stage
 COPY --from=builder /cache/models /comfyui/models
 
-# Optional: copy input folder
-# COPY input/ /comfyui/input/
+# Add the RunPod serverless handler
+COPY handler.py /handler.py
 
-# No custom nodes installed here because your errors were built-in nodes
+# Default command for RunPod Serverless
+CMD ["python3", "/handler.py"]
