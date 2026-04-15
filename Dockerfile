@@ -39,8 +39,10 @@ COPY --from=builder /cache/models /comfyui/models
 
 # Install custom nodes in the final image so ComfyUI can actually load them.
 RUN git clone https://github.com/city96/ComfyUI-GGUF /comfyui/custom_nodes/ComfyUI-GGUF && \
-    git clone https://github.com/ltdrdata/ComfyUI-PuLID-Flux /comfyui/custom_nodes/ComfyUI-PuLID-Flux && \
-    find /comfyui/custom_nodes -maxdepth 2 -name requirements.txt -print -exec pip install --no-cache-dir -r {} \;
+    pip install --no-cache-dir -r /comfyui/custom_nodes/ComfyUI-GGUF/requirements.txt
+
+RUN git clone https://github.com/balazik/ComfyUI-PuLID-Flux /comfyui/custom_nodes/ComfyUI-PuLID-Flux && \
+    pip install --no-cache-dir -r /comfyui/custom_nodes/ComfyUI-PuLID-Flux/requirements.txt
 
 COPY handler.py /handler.py
 
