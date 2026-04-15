@@ -1,0 +1,42 @@
+# ------------------------------------------------------------
+# Stage 1 — Builder with model cache
+# ------------------------------------------------------------
+FROM runpod/worker-comfyui:5.5.1-base AS builder
+
+# Create a persistent model cache directory
+ENV COMFYUI_MODEL_CACHE=/cache/models
+RUN mkdir -p $COMFYUI_MODEL_CACHE
+
+# Configure comfy-cli to use the cache
+ENV COMFY_CLI_CACHE_DIR=$COMFYUI_MODEL_CACHE
+
+# Download models into the cache (only downloads if missing)
+RUN comfy model download --url https://huggingface.co/lzyvegetable/FLUX.1-dev/resolve/main/flux1-dev.safetensors \
+    --relative-path diffusion_models \
+    --filename flux1-dev.safetensors
+
+RUN comfy model download --url https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/clip_l.safetensors \
+    --relative-path clip \
+    --filename clip_l.safetensors
+
+RUN comfy model download --url https://huggingface.co/guozinan/PuLID/resolve/main/pulid_flux_v0.9.1.safetensors \
+    --relative-path pulid \
+    --filename pulid_flux.safetensors
+
+RUN comfy model download --url https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors \
+    --relative-path vae \
+    --filename ae.safetensors
+
+
+# ------------------------------------------------------------
+# Stage 2 — Final runtime image
+# ------------------------------------------------------------
+FROM runpod/worker-comfyui:5.5.1-base
+
+# Copy cached models from builder stage
+COPY --from=builder /cache/models /comfyui/models
+
+# Optional: copy input folder
+# COPY input/ /comfyui/input/
+
+# No custom nodes installed here because your errors were built-in nodes
