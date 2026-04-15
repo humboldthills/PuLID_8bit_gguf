@@ -3,6 +3,9 @@ import os
 import shutil
 import subprocess
 import time
+import urllib.request
+import zipfile
+from pathlib import Path
 
 import requests
 import runpod
@@ -12,6 +15,7 @@ COMFY_DIR = "/comfyui"
 COMFY_INPUT_DIR = f"{COMFY_DIR}/input"
 COMFY_LOG_PATH = "/tmp/comfyui.log"
 COMFY_PROCESS = None
+MODEL_ROOT = Path("/runpod-volume/models")
 EXPECTED_MODEL_FILES = {
     "UnetLoaderGGUF": {"unet_name": "flux1-dev-Q8_0.gguf", "filename": "flux1-dev-Q8_0.gguf"},
     "DualCLIPLoaderGGUF": {
@@ -26,6 +30,58 @@ EXPECTED_MODEL_FILES = {
         "filename": "pulid_flux_v0.9.1.safetensors",
     },
 }
+RUNTIME_DOWNLOADS = [
+    (
+        "https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q8_0.gguf",
+        MODEL_ROOT / "unet" / "flux1-dev-Q8_0.gguf",
+    ),
+    (
+        "https://huggingface.co/city96/t5-v1_1-xxl-encoder-gguf/resolve/main/t5-v1_1-xxl-encoder-Q8_0.gguf",
+        MODEL_ROOT / "clip" / "t5-v1_1-xxl-encoder-Q8_0.gguf",
+    ),
+    (
+        "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/clip_l.safetensors",
+        MODEL_ROOT / "clip" / "clip_l.safetensors",
+    ),
+    (
+        "https://huggingface.co/guozinan/PuLID/resolve/main/pulid_flux_v0.9.1.safetensors",
+        MODEL_ROOT / "pulid" / "pulid_flux_v0.9.1.safetensors",
+    ),
+    (
+        "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors",
+        MODEL_ROOT / "vae" / "ae.safetensors",
+    ),
+]
+INSIGHTFACE_ZIP_URL = "https://huggingface.co/vladmandic/insightface-faceanalysis/resolve/main/antelopev2.zip"
+
+
+def download_file(url, destination):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() and destination.stat().st_size > 0:
+        return
+    urllib.request.urlretrieve(url, destination)
+
+
+def ensure_runtime_models():
+    for url, destination in RUNTIME_DOWNLOADS:
+        download_file(url, destination)
+
+    insightface_root = MODEL_ROOT / "insightface"
+    antelope_dir = insightface_root / "models" / "antelopev2"
+    if not antelope_dir.exists() or not any(antelope_dir.glob("*.onnx")):
+        insightface_root.mkdir(parents=True, exist_ok=True)
+        zip_path = insightface_root / "antelopev2.zip"
+        download_file(INSIGHTFACE_ZIP_URL, zip_path)
+        extract_root = insightface_root / "models"
+        extract_root.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(extract_root)
+
+        nested = antelope_dir / "antelopev2"
+        if nested.exists() and nested.is_dir():
+            for item in nested.iterdir():
+                shutil.move(str(item), antelope_dir / item.name)
+            nested.rmdir()
 
 
 def launch_comfy():
@@ -326,6 +382,7 @@ def handler(job):
                 )
 
     stage_input_images(job_input)
+    ensure_runtime_models()
     launch_comfy()
 
     if not wait_for_comfy():
