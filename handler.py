@@ -12,6 +12,20 @@ COMFY_DIR = "/comfyui"
 COMFY_INPUT_DIR = f"{COMFY_DIR}/input"
 COMFY_LOG_PATH = "/tmp/comfyui.log"
 COMFY_PROCESS = None
+EXPECTED_MODEL_FILES = {
+    "UnetLoaderGGUF": {"unet_name": "flux1-dev-Q8_0.gguf", "filename": "flux1-dev-Q8_0.gguf"},
+    "DualCLIPLoaderGGUF": {
+        "clip_name1": "t5-v1_1-xxl-encoder-Q8_0.gguf",
+        "clip_name2": "clip_l.safetensors",
+        "filename1": "t5-v1_1-xxl-encoder-Q8_0.gguf",
+        "filename2": "clip_l.safetensors",
+    },
+    "VAELoader": {"vae_name": "ae.safetensors", "filename": "ae.safetensors"},
+    "PulidFluxModelLoader": {
+        "pulid_file": "pulid_flux_v0.9.1.safetensors",
+        "filename": "pulid_flux_v0.9.1.safetensors",
+    },
+}
 
 
 def launch_comfy():
@@ -170,6 +184,7 @@ def convert_ui_workflow_to_prompt(workflow, object_info):
 def normalize_prompt_models(prompt, available_files):
     available_files = coerce_available_files(available_files)
     diffusion_models = available_files.get("diffusion_models", [])
+    unet_files = available_files.get("unet", [])
     vae_files = available_files.get("vae", [])
     text_encoders = available_files.get("text_encoders", []) or available_files.get("clip", [])
     pulid_files = available_files.get("pulid", [])
@@ -178,10 +193,14 @@ def normalize_prompt_models(prompt, available_files):
         class_type = node.get("class_type")
         inputs = node.get("inputs", {})
 
+        for key, expected_value in EXPECTED_MODEL_FILES.get(class_type, {}).items():
+            if key in inputs:
+                inputs[key] = expected_value
+
         if class_type == "UnetLoaderGGUF":
             for key in ("unet_name", "filename"):
                 if key in inputs:
-                    inputs[key] = normalize_filename(inputs[key], diffusion_models)
+                    inputs[key] = normalize_filename(inputs[key], unet_files or diffusion_models)
 
         if class_type == "DualCLIPLoaderGGUF":
             for key in ("clip_name1", "clip_name2", "filename", "filename1", "filename2"):
