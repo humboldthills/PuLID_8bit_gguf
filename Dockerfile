@@ -44,6 +44,8 @@ RUN git clone https://github.com/city96/ComfyUI-GGUF /comfyui/custom_nodes/Comfy
 RUN git clone https://github.com/balazik/ComfyUI-PuLID-Flux /comfyui/custom_nodes/ComfyUI-PuLID-Flux && \
     pip install --no-cache-dir -r /comfyui/custom_nodes/ComfyUI-PuLID-Flux/requirements.txt
 
+COPY lila_face_master_locked_v1.png /comfyui/input/lila_face_master_locked_v1.png
+
 COPY handler.py /handler.py
 
 CMD ["python3", "/handler.py"]
