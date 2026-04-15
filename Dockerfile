@@ -6,28 +6,26 @@ FROM runpod/worker-comfyui:5.5.1-base AS builder
 ENV COMFYUI_MODEL_CACHE=/cache/models
 ENV COMFY_CLI_CACHE_DIR=$COMFYUI_MODEL_CACHE
 
-RUN mkdir -p "$COMFYUI_MODEL_CACHE"
+RUN mkdir -p "$COMFYUI_MODEL_CACHE/unet" \
+    "$COMFYUI_MODEL_CACHE/clip" \
+    "$COMFYUI_MODEL_CACHE/vae" \
+    "$COMFYUI_MODEL_CACHE/pulid"
 
-# Download the exact model filenames the workflow expects where possible.
-RUN comfy model download --url https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q8_0.gguf \
-    --relative-path diffusion_models \
-    --filename flux1-dev-Q8_0.gguf
+# Download into the exact model folders this ComfyUI build scans.
+RUN curl -L "https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q8_0.gguf" \
+    -o "$COMFYUI_MODEL_CACHE/unet/flux1-dev-Q8_0.gguf"
 
-RUN comfy model download --url https://huggingface.co/city96/t5-v1_1-xxl-encoder-gguf/resolve/main/t5-v1_1-xxl-encoder-Q8_0.gguf \
-    --relative-path text_encoders \
-    --filename t5-v1_1-xxl-encoder-Q8_0.gguf
+RUN curl -L "https://huggingface.co/city96/t5-v1_1-xxl-encoder-gguf/resolve/main/t5-v1_1-xxl-encoder-Q8_0.gguf" \
+    -o "$COMFYUI_MODEL_CACHE/clip/t5-v1_1-xxl-encoder-Q8_0.gguf"
 
-RUN comfy model download --url https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/clip_l.safetensors \
-    --relative-path text_encoders \
-    --filename clip_l.safetensors
+RUN curl -L "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/clip_l.safetensors" \
+    -o "$COMFYUI_MODEL_CACHE/clip/clip_l.safetensors"
 
-RUN comfy model download --url https://huggingface.co/guozinan/PuLID/resolve/main/pulid_flux_v0.9.1.safetensors \
-    --relative-path pulid \
-    --filename pulid_flux.safetensors
+RUN curl -L "https://huggingface.co/guozinan/PuLID/resolve/main/pulid_flux_v0.9.1.safetensors" \
+    -o "$COMFYUI_MODEL_CACHE/pulid/pulid_flux_v0.9.1.safetensors"
 
-RUN comfy model download --url https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors \
-    --relative-path vae/FLUX1 \
-    --filename ae.safetensors
+RUN curl -L "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors" \
+    -o "$COMFYUI_MODEL_CACHE/vae/ae.safetensors"
 
 
 # ------------------------------------------------------------
