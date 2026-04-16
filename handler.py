@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import time
 import urllib.request
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -135,8 +136,19 @@ def ensure_runtime_models():
         download_file(INSIGHTFACE_ZIP_URL, zip_path)
         extract_root = insightface_root / "models"
         extract_root.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(zip_path) as zf:
-            zf.extractall(extract_root)
+        with tempfile.TemporaryDirectory(dir=str(insightface_root)) as tmpdir:
+            tmp_root = Path(tmpdir)
+            with zipfile.ZipFile(zip_path) as zf:
+                zf.extractall(tmp_root)
+
+            extracted_antelope = tmp_root / "antelopev2"
+            if not extracted_antelope.exists():
+                extracted_antelope = tmp_root / "models" / "antelopev2"
+
+            if antelope_dir.exists():
+                shutil.rmtree(antelope_dir, ignore_errors=True)
+            antelope_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(extracted_antelope), str(antelope_dir))
 
         antelope_dir = get_antelope_dir(insightface_root)
         nested = antelope_dir / "antelopev2"
