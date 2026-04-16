@@ -78,6 +78,23 @@ def download_file(url, destination):
     urllib.request.urlretrieve(url, destination)
 
 
+def mirror_model_dir(source, destination):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    if destination.is_symlink() or destination.exists():
+        if destination.is_symlink() and destination.resolve() == source.resolve():
+            return
+        if destination.is_symlink() or destination.is_file():
+            destination.unlink()
+        else:
+            shutil.rmtree(destination)
+
+    try:
+        os.symlink(source, destination, target_is_directory=True)
+    except OSError:
+        shutil.copytree(source, destination)
+
+
 def ensure_runtime_models():
     model_root = get_model_root()
 
@@ -100,6 +117,14 @@ def ensure_runtime_models():
             for item in nested.iterdir():
                 shutil.move(str(item), antelope_dir / item.name)
             nested.rmdir()
+
+    pulid_source = model_root / "pulid"
+    if pulid_source.exists():
+        mirror_model_dir(pulid_source, Path("/comfyui/models/pulid"))
+
+    insightface_source = model_root / "insightface"
+    if insightface_source.exists():
+        mirror_model_dir(insightface_source, Path("/comfyui/models/insightface"))
 
 
 def launch_comfy():
