@@ -61,9 +61,12 @@ INSIGHTFACE_ZIP_URL = "https://sourceforge.net/projects/insightface.mirror/files
 INSIGHTFACE_REQUIRED_FILES = (
     "1k3d68.onnx",
     "2d106det.onnx",
-    "det_10g.onnx",
     "genderage.onnx",
     "glintr100.onnx",
+)
+INSIGHTFACE_REQUIRED_DETECTORS = (
+    "det_10g.onnx",
+    "scrfd_10g_bnkps.onnx",
 )
 
 
@@ -122,7 +125,9 @@ def get_antelope_dir(insightface_root):
 
 
 def antelope_dir_is_valid(path):
-    return all((path / name).exists() for name in INSIGHTFACE_REQUIRED_FILES)
+    base_files_ok = all((path / name).exists() for name in INSIGHTFACE_REQUIRED_FILES)
+    detector_ok = any((path / name).exists() for name in INSIGHTFACE_REQUIRED_DETECTORS)
+    return base_files_ok and detector_ok
 
 
 def ensure_runtime_models():
