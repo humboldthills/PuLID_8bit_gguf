@@ -18,9 +18,11 @@ text = path.read_text()
 old = """        try:\n            model = FaceAnalysis(name=\"antelopev2\", root=INSIGHTFACE_DIR, providers=[provider + 'ExecutionProvider',]) # alternative to buffalo_l\n        except TypeError:\n            model = FaceAnalysis(name=\"antelopev2\", root=INSIGHTFACE_DIR) # alternative to buffalo_l\n"""
 if old not in text:
     old = """        model = FaceAnalysis(name=\"antelopev2\", root=INSIGHTFACE_DIR, providers=[provider + 'ExecutionProvider',]) # alternative to buffalo_l\n"""
-new = """        insightface_root = INSIGHTFACE_DIR.parent if INSIGHTFACE_DIR.name == 'models' else INSIGHTFACE_DIR\n        try:\n            model = FaceAnalysis(name=\"antelopev2\", root=insightface_root, providers=[provider + 'ExecutionProvider',]) # alternative to buffalo_l\n        except TypeError:\n            model = FaceAnalysis(name=\"antelopev2\", root=insightface_root) # alternative to buffalo_l\n"""
+new = """        insightface_dir = Path(INSIGHTFACE_DIR)\n        insightface_root = insightface_dir.parent if insightface_dir.name == 'models' else insightface_dir\n        try:\n            model = FaceAnalysis(name=\"antelopev2\", root=insightface_root, providers=[provider + 'ExecutionProvider',]) # alternative to buffalo_l\n        except TypeError:\n            model = FaceAnalysis(name=\"antelopev2\", root=insightface_root) # alternative to buffalo_l\n"""
 if old not in text:
     raise SystemExit("expected FaceAnalysis constructor block not found")
+if "from pathlib import Path" not in text:
+    text = "from pathlib import Path\n" + text
 path.write_text(text.replace(old, new))
 PY
 
