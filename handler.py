@@ -130,6 +130,57 @@ def antelope_dir_is_valid(path):
     return base_files_ok and detector_ok
 
 
+def mirror_antelope_variants(source_antelope_dir, model_root):
+    variant_targets = [
+        Path("/comfyui/models/insightface/models/antelopev2"),
+        Path("/comfyui/models/models/antelopev2"),
+        model_root / "insightface" / "models" / "antelopev2",
+        model_root / "models" / "antelopev2",
+    ]
+
+    resolved_source = source_antelope_dir.resolve()
+    for target in variant_targets:
+        if target.exists() and target.resolve() == resolved_source:
+            continue
+        mirror_model_dir(source_antelope_dir, target)
+
+
+def run_insightface_preflight():
+    diagnostics = []
+    try:
+        from insightface.app import FaceAnalysis
+    except Exception as e:
+        return [{"root": "<import>", "status": "import_error", "error": str(e)}]
+
+    candidate_roots = [
+        Path("/comfyui/models/insightface"),
+        Path("/comfyui/models"),
+        Path("/runpod-volume/models/insightface"),
+        Path("/runpod-volume/models"),
+    ]
+
+    for root in candidate_roots:
+        antelope = root / "models" / "antelopev2"
+        record = {
+            "root": str(root),
+            "exists": root.exists(),
+            "models_dir_exists": (root / "models").exists(),
+            "antelope_exists": antelope.exists(),
+            "antelope_files": sorted([p.name for p in antelope.glob("*")]) if antelope.exists() else [],
+        }
+        try:
+            app = FaceAnalysis(name="antelopev2", root=root)
+            model_keys = sorted(list(getattr(app, "models", {}).keys()))
+            record["status"] = "ok" if "detection" in model_keys else "missing_detection"
+            record["model_keys"] = model_keys
+        except Exception as e:
+            record["status"] = "error"
+            record["error"] = f"{type(e).__name__}: {e}"
+        diagnostics.append(record)
+
+    return diagnostics
+
+
 def ensure_runtime_models():
     model_root = get_model_root()
 
@@ -182,11 +233,11 @@ def ensure_runtime_models():
     if insightface_source.exists():
         mirror_model_dir(insightface_source, Path("/comfyui/models/insightface"))
 
-    comfy_antelope_dir = Path("/comfyui/models/insightface/models/antelopev2")
-    comfy_antelope_dir.parent.mkdir(parents=True, exist_ok=True)
     source_antelope_dir = get_antelope_dir(insightface_root)
-    if source_antelope_dir.exists() and source_antelope_dir != comfy_antelope_dir:
-        mirror_model_dir(source_antelope_dir, comfy_antelope_dir)
+    if source_antelope_dir.exists():
+        mirror_antelope_variants(source_antelope_dir, model_root)
+
+    comfy_antelope_dir = Path("/comfyui/models/insightface/models/antelopev2")
 
     diagnostics = {
         "model_root": str(model_root),
@@ -198,6 +249,7 @@ def ensure_runtime_models():
         "comfy_antelope_dir": str(comfy_antelope_dir),
         "comfy_antelope_files": sorted([p.name for p in comfy_antelope_dir.glob("*")]) if comfy_antelope_dir.exists() else [],
     }
+    diagnostics["insightface_preflight"] = run_insightface_preflight()
     return diagnostics
 
 
