@@ -1,5 +1,10 @@
 FROM runpod/worker-comfyui:5.5.1-base
 
+# insightface 0.7.3 falls back to a source build on this image, which needs g++.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends g++ && \
+    rm -rf /var/lib/apt/lists/*
+
 # Install custom nodes in the final image so ComfyUI can actually load them.
 RUN git clone https://github.com/city96/ComfyUI-GGUF /comfyui/custom_nodes/ComfyUI-GGUF && \
     pip install --no-cache-dir -r /comfyui/custom_nodes/ComfyUI-GGUF/requirements.txt
