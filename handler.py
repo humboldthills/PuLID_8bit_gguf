@@ -181,6 +181,17 @@ def run_insightface_preflight():
     return diagnostics
 
 
+def get_runtime_package_versions():
+    versions = {}
+    for module_name in ("insightface", "onnx", "onnxruntime"):
+        try:
+            module = __import__(module_name)
+            versions[module_name] = getattr(module, "__version__", "unknown")
+        except Exception as e:
+            versions[module_name] = f"import_error: {e}"
+    return versions
+
+
 def ensure_runtime_models():
     model_root = get_model_root()
 
@@ -241,6 +252,7 @@ def ensure_runtime_models():
 
     diagnostics = {
         "model_root": str(model_root),
+        "package_versions": get_runtime_package_versions(),
         "pulid_dir": str(pulid_source),
         "pulid_files": sorted([p.name for p in pulid_source.glob("*")]) if pulid_source.exists() else [],
         "insightface_dir": str(insightface_root),
