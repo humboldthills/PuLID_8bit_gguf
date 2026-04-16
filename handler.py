@@ -56,7 +56,7 @@ RUNTIME_DOWNLOADS = [
         Path("vae/ae.safetensors"),
     ),
 ]
-INSIGHTFACE_ZIP_URL = "https://huggingface.co/vladmandic/insightface-faceanalysis/resolve/main/antelopev2.zip"
+INSIGHTFACE_ZIP_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/antelopev2.zip"
 INSIGHTFACE_REQUIRED_FILES = (
     "1k3d68.onnx",
     "2d106det.onnx",
@@ -126,8 +126,12 @@ def ensure_runtime_models():
     insightface_root = model_root / "insightface"
     antelope_dir = get_antelope_dir(insightface_root)
     if not antelope_dir_is_valid(antelope_dir):
+        if antelope_dir.exists():
+            shutil.rmtree(antelope_dir, ignore_errors=True)
         insightface_root.mkdir(parents=True, exist_ok=True)
         zip_path = insightface_root / "antelopev2.zip"
+        if zip_path.exists():
+            zip_path.unlink()
         download_file(INSIGHTFACE_ZIP_URL, zip_path)
         extract_root = insightface_root / "models"
         extract_root.mkdir(parents=True, exist_ok=True)
@@ -154,6 +158,18 @@ def ensure_runtime_models():
     source_antelope_dir = get_antelope_dir(insightface_root)
     if source_antelope_dir.exists() and source_antelope_dir != comfy_antelope_dir:
         mirror_model_dir(source_antelope_dir, comfy_antelope_dir)
+
+    diagnostics = {
+        "model_root": str(model_root),
+        "pulid_dir": str(pulid_source),
+        "pulid_files": sorted([p.name for p in pulid_source.glob("*")]) if pulid_source.exists() else [],
+        "insightface_dir": str(insightface_root),
+        "source_antelope_dir": str(source_antelope_dir),
+        "source_antelope_files": sorted([p.name for p in source_antelope_dir.glob("*")]) if source_antelope_dir.exists() else [],
+        "comfy_antelope_dir": str(comfy_antelope_dir),
+        "comfy_antelope_files": sorted([p.name for p in comfy_antelope_dir.glob("*")]) if comfy_antelope_dir.exists() else [],
+    }
+    return diagnostics
 
 
 def launch_comfy():
@@ -454,13 +470,14 @@ def handler(job):
                 )
 
     stage_input_images(job_input)
-    ensure_runtime_models()
+    diagnostics = ensure_runtime_models()
     launch_comfy()
 
     if not wait_for_comfy():
         return {
             "status": "error",
             "error": "ComfyUI did not start in time",
+            "diagnostics": diagnostics,
             "log_tail": read_log_tail(),
         }
 
@@ -468,11 +485,13 @@ def handler(job):
     if "error" in result:
         return {
             "status": "error",
+            "diagnostics": diagnostics,
             **result,
         }
 
     return {
         "status": "success",
+        "diagnostics": diagnostics,
         **result,
     }
 
