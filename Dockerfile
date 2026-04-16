@@ -7,6 +7,11 @@ RUN git clone https://github.com/city96/ComfyUI-GGUF /comfyui/custom_nodes/Comfy
 RUN git clone https://github.com/balazik/ComfyUI-PuLID-Flux /comfyui/custom_nodes/ComfyUI-PuLID-Flux && \
     pip install --no-cache-dir -r /comfyui/custom_nodes/ComfyUI-PuLID-Flux/requirements.txt
 
+# Pin InsightFace stack for Python 3.12. The model pack is present and valid,
+# but newer package combinations still fail FaceAnalysis(name='antelopev2')
+# with "assert 'detection' in self.models" in this environment.
+RUN pip install --no-cache-dir --upgrade "onnx==1.18.0" "insightface==0.7.3"
+
 # ComfyUI-PuLID-Flux assumes an insightface API variant where FaceAnalysis
 # accepts providers=... in __init__. The RunPod base image can resolve a
 # different variant, and some node versions pass the wrong root path.
