@@ -103,6 +103,13 @@ def mirror_model_dir(source, destination):
         shutil.copytree(source, destination)
 
 
+def remove_path(path):
+    if path.is_symlink() or path.is_file():
+        path.unlink(missing_ok=True)
+    elif path.exists():
+        shutil.rmtree(path, ignore_errors=True)
+
+
 def get_antelope_dir(insightface_root):
     candidates = [
         insightface_root / "models" / "antelopev2",
@@ -127,8 +134,7 @@ def ensure_runtime_models():
     insightface_root = model_root / "insightface"
     antelope_dir = get_antelope_dir(insightface_root)
     if not antelope_dir_is_valid(antelope_dir):
-        if antelope_dir.exists():
-            shutil.rmtree(antelope_dir, ignore_errors=True)
+        remove_path(antelope_dir)
         insightface_root.mkdir(parents=True, exist_ok=True)
         zip_path = insightface_root / "antelopev2.zip"
         if zip_path.exists():
@@ -145,10 +151,9 @@ def ensure_runtime_models():
             if not extracted_antelope.exists():
                 extracted_antelope = tmp_root / "models" / "antelopev2"
 
-            if antelope_dir.exists():
-                shutil.rmtree(antelope_dir, ignore_errors=True)
+            remove_path(antelope_dir)
             antelope_dir.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(extracted_antelope), str(antelope_dir))
+            shutil.copytree(extracted_antelope, antelope_dir, dirs_exist_ok=False)
 
         antelope_dir = get_antelope_dir(insightface_root)
         nested = antelope_dir / "antelopev2"
