@@ -57,6 +57,13 @@ RUNTIME_DOWNLOADS = [
     ),
 ]
 INSIGHTFACE_ZIP_URL = "https://huggingface.co/vladmandic/insightface-faceanalysis/resolve/main/antelopev2.zip"
+INSIGHTFACE_REQUIRED_FILES = (
+    "1k3d68.onnx",
+    "2d106det.onnx",
+    "det_10g.onnx",
+    "genderage.onnx",
+    "glintr100.onnx",
+)
 
 
 def get_model_root():
@@ -95,6 +102,21 @@ def mirror_model_dir(source, destination):
         shutil.copytree(source, destination)
 
 
+def get_antelope_dir(insightface_root):
+    candidates = [
+        insightface_root / "models" / "antelopev2",
+        insightface_root / "antelopev2",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+def antelope_dir_is_valid(path):
+    return all((path / name).exists() for name in INSIGHTFACE_REQUIRED_FILES)
+
+
 def ensure_runtime_models():
     model_root = get_model_root()
 
@@ -102,8 +124,8 @@ def ensure_runtime_models():
         download_file(url, model_root / relative_destination)
 
     insightface_root = model_root / "insightface"
-    antelope_dir = insightface_root / "models" / "antelopev2"
-    if not antelope_dir.exists() or not any(antelope_dir.glob("*.onnx")):
+    antelope_dir = get_antelope_dir(insightface_root)
+    if not antelope_dir_is_valid(antelope_dir):
         insightface_root.mkdir(parents=True, exist_ok=True)
         zip_path = insightface_root / "antelopev2.zip"
         download_file(INSIGHTFACE_ZIP_URL, zip_path)
@@ -112,6 +134,7 @@ def ensure_runtime_models():
         with zipfile.ZipFile(zip_path) as zf:
             zf.extractall(extract_root)
 
+        antelope_dir = get_antelope_dir(insightface_root)
         nested = antelope_dir / "antelopev2"
         if nested.exists() and nested.is_dir():
             for item in nested.iterdir():
@@ -125,6 +148,12 @@ def ensure_runtime_models():
     insightface_source = model_root / "insightface"
     if insightface_source.exists():
         mirror_model_dir(insightface_source, Path("/comfyui/models/insightface"))
+
+    comfy_antelope_dir = Path("/comfyui/models/insightface/models/antelopev2")
+    comfy_antelope_dir.parent.mkdir(parents=True, exist_ok=True)
+    source_antelope_dir = get_antelope_dir(insightface_root)
+    if source_antelope_dir.exists() and source_antelope_dir != comfy_antelope_dir:
+        mirror_model_dir(source_antelope_dir, comfy_antelope_dir)
 
 
 def launch_comfy():
