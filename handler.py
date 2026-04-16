@@ -57,7 +57,7 @@ RUNTIME_DOWNLOADS = [
         Path("vae/ae.safetensors"),
     ),
 ]
-INSIGHTFACE_ZIP_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/antelopev2.zip"
+INSIGHTFACE_ZIP_URL = "https://sourceforge.net/projects/insightface.mirror/files/v0.7/antelopev2.zip/download"
 INSIGHTFACE_REQUIRED_FILES = (
     "1k3d68.onnx",
     "2d106det.onnx",
@@ -161,6 +161,13 @@ def ensure_runtime_models():
             for item in nested.iterdir():
                 shutil.move(str(item), antelope_dir / item.name)
             nested.rmdir()
+
+        if not antelope_dir_is_valid(antelope_dir):
+            raise RuntimeError(
+                f"InsightFace antelopev2 package is still invalid after refresh. "
+                f"Resolved dir: {antelope_dir}. Files: "
+                f"{sorted([p.name for p in antelope_dir.glob('*')]) if antelope_dir.exists() else []}"
+            )
 
     pulid_source = model_root / "pulid"
     if pulid_source.exists():
