@@ -1,8 +1,9 @@
 FROM runpod/worker-comfyui:5.5.1-base
 
-# insightface 0.7.3 falls back to a source build on this image, which needs g++.
+# insightface 0.7.3 falls back to a source build on this image, which needs a
+# minimal C/C++ toolchain plus Python headers.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends g++ && \
+    apt-get install -y --no-install-recommends g++ python3-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Install custom nodes in the final image so ComfyUI can actually load them.
