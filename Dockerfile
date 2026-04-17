@@ -53,64 +53,6 @@ replacement = (
 )
 text = faceanalysis_pattern.sub(replacement, text, count=1)
 
-forward_sig_pattern = re.compile(
-    r"def forward_orig\((?P<params>.*?)\)\s*->\s*Tensor:",
-    re.DOTALL,
-)
-match = forward_sig_pattern.search(text)
-if not match:
-    raise SystemExit("expected forward_orig signature not found")
-params = match.group("params")
-if "transformer_options" not in params:
-    params = params.rstrip() + ",\n\n transformer_options=None,\n\n attn_mask=None,\n\n **kwargs,\n"
-text = text[:match.start()] + f"def forward_orig({params}) -> Tensor:" + text[match.end():]
-
-double_pattern = re.compile(
-    r"^(?P<indent>\s*)img,\s*txt\s*=\s*block\(img=img,\s*txt=txt,\s*vec=vec,\s*pe=pe\)\s*$",
-    re.MULTILINE,
-)
-match = double_pattern.search(text)
-if not match:
-    raise SystemExit("expected double block call not found")
-indent = match.group("indent")
-double_replacement = (
-    f"{indent}try:\n"
-    f"{indent}    img, txt = block(img=img, txt=txt, vec=vec, pe=pe, transformer_options=transformer_options, attn_mask=attn_mask)\n"
-    f"{indent}except TypeError as e:\n"
-    f"{indent}    if \"unexpected keyword argument\" not in str(e):\n"
-    f"{indent}        raise\n"
-    f"{indent}    try:\n"
-    f"{indent}        img, txt = block(img=img, txt=txt, vec=vec, pe=pe, attn_mask=attn_mask)\n"
-    f"{indent}    except TypeError as e:\n"
-    f"{indent}        if \"unexpected keyword argument\" not in str(e):\n"
-    f"{indent}            raise\n"
-    f"{indent}        img, txt = block(img=img, txt=txt, vec=vec, pe=pe)"
-)
-text = double_pattern.sub(double_replacement, text, count=1)
-
-single_pattern = re.compile(
-    r"^(?P<indent>\s*)img\s*=\s*block\(img,\s*vec=vec,\s*pe=pe\)\s*$",
-    re.MULTILINE,
-)
-match = single_pattern.search(text)
-if not match:
-    raise SystemExit("expected single block call not found")
-indent = match.group("indent")
-single_replacement = (
-    f"{indent}try:\n"
-    f"{indent}    img = block(img, vec=vec, pe=pe, transformer_options=transformer_options, attn_mask=attn_mask)\n"
-    f"{indent}except TypeError as e:\n"
-    f"{indent}    if \"unexpected keyword argument\" not in str(e):\n"
-    f"{indent}        raise\n"
-    f"{indent}    try:\n"
-    f"{indent}        img = block(img, vec=vec, pe=pe, attn_mask=attn_mask)\n"
-    f"{indent}    except TypeError as e:\n"
-    f"{indent}        if \"unexpected keyword argument\" not in str(e):\n"
-    f"{indent}            raise\n"
-    f"{indent}        img = block(img, vec=vec, pe=pe)"
-)
-text = single_pattern.sub(single_replacement, text, count=1)
-
 path.write_text(text)
 PY
 
