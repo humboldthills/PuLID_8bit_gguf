@@ -22,37 +22,94 @@ RUN pip install --no-cache-dir --upgrade "onnx==1.18.0" "insightface==0.7.3"
 # accepts providers=... in __init__. The RunPod base image can resolve a
 # different variant, and some node versions pass the wrong root path.
 RUN python3 - <<'PY'
+import re
 from pathlib import Path
 
 path = Path("/comfyui/custom_nodes/ComfyUI-PuLID-Flux/pulidflux.py")
 text = path.read_text()
-old = """        try:\n            model = FaceAnalysis(name=\"antelopev2\", root=INSIGHTFACE_DIR, providers=[provider + 'ExecutionProvider',]) # alternative to buffalo_l\n        except TypeError:\n            model = FaceAnalysis(name=\"antelopev2\", root=INSIGHTFACE_DIR) # alternative to buffalo_l\n"""
-if old not in text:
-    old = """        model = FaceAnalysis(name=\"antelopev2\", root=INSIGHTFACE_DIR, providers=[provider + 'ExecutionProvider',]) # alternative to buffalo_l\n"""
-new = """        insightface_dir = Path(INSIGHTFACE_DIR)\n        if insightface_dir.name == 'antelopev2':\n            insightface_root = insightface_dir.parent.parent\n        elif insightface_dir.name == 'models':\n            insightface_root = insightface_dir.parent\n        else:\n            insightface_root = insightface_dir\n        try:\n            model = FaceAnalysis(name=\"antelopev2\", root=insightface_root, providers=[provider + 'ExecutionProvider',]) # alternative to buffalo_l\n        except TypeError:\n            model = FaceAnalysis(name=\"antelopev2\", root=insightface_root) # alternative to buffalo_l\n"""
-if old not in text:
-    raise SystemExit("expected FaceAnalysis constructor block not found")
+
 if "from pathlib import Path" not in text:
     text = "from pathlib import Path\n" + text
-text = text.replace(old, new)
 
-old_sig = """def forward_orig(\n\n self,\n\n img: Tensor,\n\n img_ids: Tensor,\n  txt: Tensor,\n\n txt_ids: Tensor,\n\n timesteps: Tensor,\n\n y: Tensor,\n\n guidance: Tensor = None,\n\n control=None,\n\n) -> Tensor:\n"""
-new_sig = """def forward_orig(\n\n self,\n\n img: Tensor,\n\n img_ids: Tensor,\n  txt: Tensor,\n\n txt_ids: Tensor,\n\n timesteps: Tensor,\n\n y: Tensor,\n\n guidance: Tensor = None,\n\n control=None,\n\n transformer_options=None,\n\n attn_mask=None,\n\n **kwargs,\n\n) -> Tensor:\n"""
-if old_sig not in text:
-    raise SystemExit("expected forward_orig signature block not found")
-text = text.replace(old_sig, new_sig)
+faceanalysis_pattern = re.compile(
+    r"(?ms)^(?P<indent>\s*)model\s*=\s*FaceAnalysis\(name=\"antelopev2\", root=INSIGHTFACE_DIR, providers=\[provider \+ 'ExecutionProvider',\]\)\s*# alternative to buffalo_l\s*$"
+)
+match = faceanalysis_pattern.search(text)
+if not match:
+    raise SystemExit("expected FaceAnalysis constructor call not found")
+indent = match.group("indent")
+replacement = (
+    f"{indent}insightface_dir = Path(INSIGHTFACE_DIR)\n"
+    f"{indent}if insightface_dir.name == 'antelopev2':\n"
+    f"{indent}    insightface_root = insightface_dir.parent.parent\n"
+    f"{indent}elif insightface_dir.name == 'models':\n"
+    f"{indent}    insightface_root = insightface_dir.parent\n"
+    f"{indent}else:\n"
+    f"{indent}    insightface_root = insightface_dir\n"
+    f"{indent}try:\n"
+    f"{indent}    model = FaceAnalysis(name=\"antelopev2\", root=insightface_root, providers=[provider + 'ExecutionProvider',]) # alternative to buffalo_l\n"
+    f"{indent}except TypeError:\n"
+    f"{indent}    model = FaceAnalysis(name=\"antelopev2\", root=insightface_root) # alternative to buffalo_l"
+)
+text = faceanalysis_pattern.sub(replacement, text, count=1)
 
-old_double = """ img, txt = block(img=img, txt=txt, vec=vec, pe=pe)\n"""
-new_double = """ try:\n  img, txt = block(img=img, txt=txt, vec=vec, pe=pe, transformer_options=transformer_options, attn_mask=attn_mask)\n except TypeError as e:\n  if \"unexpected keyword argument\" not in str(e):\n   raise\n  try:\n   img, txt = block(img=img, txt=txt, vec=vec, pe=pe, attn_mask=attn_mask)\n  except TypeError as e:\n   if \"unexpected keyword argument\" not in str(e):\n    raise\n   img, txt = block(img=img, txt=txt, vec=vec, pe=pe)\n"""
-if old_double not in text:
+forward_sig_pattern = re.compile(
+    r"def forward_orig\((?P<params>.*?)\)\s*->\s*Tensor:",
+    re.DOTALL,
+)
+match = forward_sig_pattern.search(text)
+if not match:
+    raise SystemExit("expected forward_orig signature not found")
+params = match.group("params")
+if "transformer_options" not in params:
+    params = params.rstrip() + ",\n\n transformer_options=None,\n\n attn_mask=None,\n\n **kwargs,\n"
+text = text[:match.start()] + f"def forward_orig({params}) -> Tensor:" + text[match.end():]
+
+double_pattern = re.compile(
+    r"^(?P<indent>\s*)img,\s*txt\s*=\s*block\(img=img,\s*txt=txt,\s*vec=vec,\s*pe=pe\)\s*$",
+    re.MULTILINE,
+)
+match = double_pattern.search(text)
+if not match:
     raise SystemExit("expected double block call not found")
-text = text.replace(old_double, new_double, 1)
+indent = match.group("indent")
+double_replacement = (
+    f"{indent}try:\n"
+    f"{indent}    img, txt = block(img=img, txt=txt, vec=vec, pe=pe, transformer_options=transformer_options, attn_mask=attn_mask)\n"
+    f"{indent}except TypeError as e:\n"
+    f"{indent}    if \"unexpected keyword argument\" not in str(e):\n"
+    f"{indent}        raise\n"
+    f"{indent}    try:\n"
+    f"{indent}        img, txt = block(img=img, txt=txt, vec=vec, pe=pe, attn_mask=attn_mask)\n"
+    f"{indent}    except TypeError as e:\n"
+    f"{indent}        if \"unexpected keyword argument\" not in str(e):\n"
+    f"{indent}            raise\n"
+    f"{indent}        img, txt = block(img=img, txt=txt, vec=vec, pe=pe)"
+)
+text = double_pattern.sub(double_replacement, text, count=1)
 
-old_single = """ img = block(img, vec=vec, pe=pe)\n"""
-new_single = """ try:\n  img = block(img, vec=vec, pe=pe, transformer_options=transformer_options, attn_mask=attn_mask)\n except TypeError as e:\n  if \"unexpected keyword argument\" not in str(e):\n   raise\n  try:\n   img = block(img, vec=vec, pe=pe, attn_mask=attn_mask)\n  except TypeError as e:\n   if \"unexpected keyword argument\" not in str(e):\n    raise\n   img = block(img, vec=vec, pe=pe)\n"""
-if old_single not in text:
+single_pattern = re.compile(
+    r"^(?P<indent>\s*)img\s*=\s*block\(img,\s*vec=vec,\s*pe=pe\)\s*$",
+    re.MULTILINE,
+)
+match = single_pattern.search(text)
+if not match:
     raise SystemExit("expected single block call not found")
-text = text.replace(old_single, new_single, 1)
+indent = match.group("indent")
+single_replacement = (
+    f"{indent}try:\n"
+    f"{indent}    img = block(img, vec=vec, pe=pe, transformer_options=transformer_options, attn_mask=attn_mask)\n"
+    f"{indent}except TypeError as e:\n"
+    f"{indent}    if \"unexpected keyword argument\" not in str(e):\n"
+    f"{indent}        raise\n"
+    f"{indent}    try:\n"
+    f"{indent}        img = block(img, vec=vec, pe=pe, attn_mask=attn_mask)\n"
+    f"{indent}    except TypeError as e:\n"
+    f"{indent}        if \"unexpected keyword argument\" not in str(e):\n"
+    f"{indent}            raise\n"
+    f"{indent}        img = block(img, vec=vec, pe=pe)"
+)
+text = single_pattern.sub(single_replacement, text, count=1)
 
 path.write_text(text)
 PY
