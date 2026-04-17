@@ -34,7 +34,44 @@ if old not in text:
     raise SystemExit("expected FaceAnalysis constructor block not found")
 if "from pathlib import Path" not in text:
     text = "from pathlib import Path\n" + text
-path.write_text(text.replace(old, new))
+text = text.replace(old, new)
+
+old_sig = """def forward_orig(\n\n self,\n\n img: Tensor,\n\n img_ids: Tensor,\n  txt: Tensor,\n\n txt_ids: Tensor,\n\n timesteps: Tensor,\n\n y: Tensor,\n\n guidance: Tensor = None,\n\n control=None,\n\n) -> Tensor:\n"""
+new_sig = """def forward_orig(\n\n self,\n\n img: Tensor,\n\n img_ids: Tensor,\n  txt: Tensor,\n\n txt_ids: Tensor,\n\n timesteps: Tensor,\n\n y: Tensor,\n\n guidance: Tensor = None,\n\n control=None,\n\n transformer_options=None,\n\n attn_mask=None,\n\n **kwargs,\n\n) -> Tensor:\n"""
+if old_sig not in text:
+    raise SystemExit("expected forward_orig signature block not found")
+text = text.replace(old_sig, new_sig)
+
+old_double = """ img, txt = block(img=img, txt=txt, vec=vec, pe=pe)\n"""
+new_double = """ try:\n  img, txt = block(img=img, txt=txt, vec=vec, pe=pe, transformer_options=transformer_options, attn_mask=attn_mask)\n except TypeError as e:\n  if \"unexpected keyword argument\" not in str(e):\n   raise\n  try:\n   img, txt = block(img=img, txt=txt, vec=vec, pe=pe, attn_mask=attn_mask)\n  except TypeError as e:\n   if \"unexpected keyword argument\" not in str(e):\n    raise\n   img, txt = block(img=img, txt=txt, vec=vec, pe=pe)\n"""
+if old_double not in text:
+    raise SystemExit("expected double block call not found")
+text = text.replace(old_double, new_double, 1)
+
+old_single = """ img = block(img, vec=vec, pe=pe)\n"""
+new_single = """ try:\n  img = block(img, vec=vec, pe=pe, transformer_options=transformer_options, attn_mask=attn_mask)\n except TypeError as e:\n  if \"unexpected keyword argument\" not in str(e):\n   raise\n  try:\n   img = block(img, vec=vec, pe=pe, attn_mask=attn_mask)\n  except TypeError as e:\n   if \"unexpected keyword argument\" not in str(e):\n    raise\n   img = block(img, vec=vec, pe=pe)\n"""
+if old_single not in text:
+    raise SystemExit("expected single block call not found")
+text = text.replace(old_single, new_single, 1)
+
+path.write_text(text)
+PY
+
+# ComfyUI 0.3.68 calls self.forward_orig(..., attn_mask=...) in Flux model
+# code, but the PuLID monkeypatch still targets an older signature in some
+# revisions. Patch the caller to retry without attn_mask/transformer_options
+# when the monkeypatched method does not accept them.
+RUN python3 - <<'PY'
+from pathlib import Path
+
+path = Path("/comfyui/comfy/ldm/flux/model.py")
+text = path.read_text()
+old = """        out = self.forward_orig(img, img_ids, context, txt_ids, timestep, y, guidance, control, transformer_options, attn_mask=kwargs.get(\"attention_mask\", None))\n"""
+new = """        try:\n            out = self.forward_orig(img, img_ids, context, txt_ids, timestep, y, guidance, control, transformer_options, attn_mask=kwargs.get(\"attention_mask\", None))\n        except TypeError as e:\n            if \"unexpected keyword argument 'attn_mask'\" not in str(e):\n                raise\n            try:\n                out = self.forward_orig(img, img_ids, context, txt_ids, timestep, y, guidance, control, transformer_options)\n            except TypeError as e:\n                if \"positional arguments\" not in str(e) and \"unexpected keyword argument 'transformer_options'\" not in str(e):\n                    raise\n                out = self.forward_orig(img, img_ids, context, txt_ids, timestep, y, guidance, control)\n"""
+if old not in text:
+    raise SystemExit("expected Flux forward_orig call not found")
+text = text.replace(old, new, 1)
+path.write_text(text)
 PY
 
 COPY input/lila_face_master_locked_v1.png /comfyui/input/lila_face_master_locked_v1.png
