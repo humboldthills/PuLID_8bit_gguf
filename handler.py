@@ -18,8 +18,8 @@ COMFY_LOG_PATH = "/tmp/comfyui.log"
 COMFY_PROCESS = None
 MODEL_ROOT_OVERRIDE = os.environ.get("MODEL_ROOT_OVERRIDE", "").strip()
 MODEL_ROOT_CANDIDATES = [
-    Path("/runpod-volume/workspace/ComfyUI/models"),
     Path("/workspace/ComfyUI/models"),
+    Path("/runpod-volume/workspace/ComfyUI/models"),
     Path("/runpod-volume/models"),
 ]
 EXPECTED_MODEL_FILES = {
@@ -77,15 +77,59 @@ def get_model_root():
         override.mkdir(parents=True, exist_ok=True)
         return override
 
-    preferred = MODEL_ROOT_CANDIDATES[0]
     expected_dirs = ("unet", "clip", "vae", "pulid", "insightface", "checkpoints")
+    seen = set()
+    candidates = []
 
     for candidate in MODEL_ROOT_CANDIDATES:
+        normalized = str(candidate.resolve(strict=False))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        candidates.append(candidate)
+
+    for candidate in candidates:
         if any((candidate / name).exists() for name in expected_dirs):
             return candidate
 
-    preferred.mkdir(parents=True, exist_ok=True)
-    return preferred
+    for candidate in candidates:
+        if candidate.parent.exists():
+            candidate.mkdir(parents=True, exist_ok=True)
+            return candidate
+
+    fallback = Path("/workspace/ComfyUI/models")
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
+
+
+def get_model_root_diagnostics(selected_root):
+    diagnostics = {
+        "selected_model_root": str(selected_root),
+        "model_root_override": MODEL_ROOT_OVERRIDE or None,
+        "model_root_candidates": [],
+    }
+
+    for candidate in MODEL_ROOT_CANDIDATES:
+        resolved = candidate.resolve(strict=False)
+        entry = {
+            "candidate": str(candidate),
+            "resolved": str(resolved),
+            "exists": candidate.exists(),
+            "resolved_exists": resolved.exists(),
+            "parent_exists": candidate.parent.exists(),
+            "expected_dirs_present": sorted(
+                [
+                    name
+                    for name in ("unet", "clip", "vae", "pulid", "insightface", "checkpoints")
+                    if (candidate / name).exists()
+                ]
+            ),
+            "is_selected": candidate == selected_root,
+            "resolved_is_selected": resolved == selected_root.resolve(strict=False),
+        }
+        diagnostics["model_root_candidates"].append(entry)
+
+    return diagnostics
 
 
 def download_file(url, destination):
@@ -200,6 +244,7 @@ def get_runtime_package_versions():
 
 def ensure_runtime_models():
     model_root = get_model_root()
+    root_diagnostics = get_model_root_diagnostics(model_root)
 
     for url, relative_destination in RUNTIME_DOWNLOADS:
         download_file(url, model_root / relative_destination)
@@ -267,6 +312,7 @@ def ensure_runtime_models():
         "comfy_antelope_dir": str(comfy_antelope_dir),
         "comfy_antelope_files": sorted([p.name for p in comfy_antelope_dir.glob("*")]) if comfy_antelope_dir.exists() else [],
     }
+    diagnostics.update(root_diagnostics)
     diagnostics["insightface_preflight"] = run_insightface_preflight()
     return diagnostics
 
