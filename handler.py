@@ -23,6 +23,7 @@ MODEL_ROOT_CANDIDATES = [
     Path("/runpod-volume/workspace/ComfyUI/models"),
     Path("/runpod-volume/models"),
 ]
+EXPECTED_MODEL_DIRS = ("unet", "clip", "vae", "pulid", "insightface", "checkpoints")
 EXPECTED_MODEL_FILES = {
     "UnetLoaderGGUF": {"unet_name": "flux1-dev-Q8_0.gguf", "filename": "flux1-dev-Q8_0.gguf"},
     "DualCLIPLoaderGGUF": {
@@ -72,13 +73,7 @@ INSIGHTFACE_REQUIRED_DETECTORS = (
 )
 
 
-def get_model_root():
-    if MODEL_ROOT_OVERRIDE:
-        override = Path(MODEL_ROOT_OVERRIDE)
-        override.mkdir(parents=True, exist_ok=True)
-        return override
-
-    expected_dirs = ("unet", "clip", "vae", "pulid", "insightface", "checkpoints")
+def get_unique_model_root_candidates():
     seen = set()
     candidates = []
 
@@ -89,28 +84,39 @@ def get_model_root():
         seen.add(normalized)
         candidates.append(candidate)
 
+    return candidates
+
+
+def get_model_root():
+    if MODEL_ROOT_OVERRIDE:
+        return Path(MODEL_ROOT_OVERRIDE)
+
+    candidates = get_unique_model_root_candidates()
     for candidate in candidates:
-        if any((candidate / name).exists() for name in expected_dirs):
+        if any((candidate / name).exists() for name in EXPECTED_MODEL_DIRS):
             return candidate
 
-    for candidate in candidates:
-        if candidate.parent.exists():
-            candidate.mkdir(parents=True, exist_ok=True)
-            return candidate
-
-    fallback = Path("/workspace/ComfyUI/models")
-    fallback.mkdir(parents=True, exist_ok=True)
-    return fallback
+    raise RuntimeError(
+        "No existing model root was found. Set MODEL_ROOT_OVERRIDE or make one of the "
+        f"expected model roots available: {', '.join(str(path) for path in candidates)}"
+    )
 
 
-def get_model_root_diagnostics(selected_root):
+def get_model_root_probe():
+    selected_root = None
+    error = None
+    try:
+        selected_root = get_model_root()
+    except Exception as e:
+        error = f"{type(e).__name__}: {e}"
+
     diagnostics = {
-        "selected_model_root": str(selected_root),
+        "selected_model_root": str(selected_root) if selected_root else None,
         "model_root_override": MODEL_ROOT_OVERRIDE or None,
         "model_root_candidates": [],
     }
 
-    for candidate in MODEL_ROOT_CANDIDATES:
+    for candidate in get_unique_model_root_candidates():
         resolved = candidate.resolve(strict=False)
         entry = {
             "candidate": str(candidate),
@@ -119,17 +125,23 @@ def get_model_root_diagnostics(selected_root):
             "resolved_exists": resolved.exists(),
             "parent_exists": candidate.parent.exists(),
             "expected_dirs_present": sorted(
-                [
-                    name
-                    for name in ("unet", "clip", "vae", "pulid", "insightface", "checkpoints")
-                    if (candidate / name).exists()
-                ]
+                [name for name in EXPECTED_MODEL_DIRS if (candidate / name).exists()]
             ),
-            "is_selected": candidate == selected_root,
-            "resolved_is_selected": resolved == selected_root.resolve(strict=False),
+            "is_selected": selected_root is not None and candidate == selected_root,
+            "resolved_is_selected": selected_root is not None and resolved == selected_root.resolve(strict=False),
         }
         diagnostics["model_root_candidates"].append(entry)
 
+    if error:
+        diagnostics["model_root_error"] = error
+
+    return selected_root, diagnostics
+
+
+def get_model_root_diagnostics(selected_root):
+    _, diagnostics = get_model_root_probe()
+    diagnostics["selected_model_root"] = str(selected_root)
+    diagnostics.pop("model_root_error", None)
     return diagnostics
 
 
@@ -244,8 +256,9 @@ def get_runtime_package_versions():
 
 
 def ensure_runtime_models():
-    model_root = get_model_root()
-    root_diagnostics = get_model_root_diagnostics(model_root)
+    model_root, root_diagnostics = get_model_root_probe()
+    if model_root is None:
+        raise RuntimeError(root_diagnostics["model_root_error"])
 
     for url, relative_destination in RUNTIME_DOWNLOADS:
         download_file(url, model_root / relative_destination)
@@ -616,7 +629,16 @@ def handler(job):
                 )
 
     stage_input_images(job_input)
-    diagnostics = ensure_runtime_models()
+    try:
+        diagnostics = ensure_runtime_models()
+    except Exception as e:
+        _, root_probe = get_model_root_probe()
+        return {
+            "status": "error",
+            "error": "Failed to resolve model root",
+            "details": str(e),
+            "diagnostics": root_probe,
+        }
     launch_comfy()
 
     if not wait_for_comfy():
