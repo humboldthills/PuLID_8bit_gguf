@@ -208,6 +208,21 @@ def normalize_antelope_dir(path):
         nested.rmdir()
 
 
+def get_existing_valid_antelope_dir(model_root):
+    candidates = [
+        Path("/comfyui/models/insightface/models/antelopev2"),
+        Path("/comfyui/models/insightface/antelopev2"),
+        model_root / "insightface" / "models" / "antelopev2",
+        model_root / "insightface" / "antelopev2",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            normalize_antelope_dir(candidate)
+            if antelope_dir_is_valid(candidate):
+                return candidate
+    return None
+
+
 def run_insightface_preflight():
     diagnostics = []
     try:
@@ -264,8 +279,9 @@ def ensure_runtime_models():
         download_file(url, model_root / relative_destination)
 
     insightface_root = model_root / "insightface"
-    antelope_dir = get_antelope_dir(insightface_root)
-    if not antelope_dir_is_valid(antelope_dir):
+    antelope_dir = get_existing_valid_antelope_dir(model_root)
+    if antelope_dir is None:
+        antelope_dir = get_antelope_dir(insightface_root)
         remove_path(antelope_dir)
         insightface_root.mkdir(parents=True, exist_ok=True)
         zip_path = insightface_root / "antelopev2.zip"
@@ -307,7 +323,7 @@ def ensure_runtime_models():
     if insightface_source.exists():
         mirror_model_dir(insightface_source, Path("/comfyui/models/insightface"))
 
-    source_antelope_dir = get_antelope_dir(insightface_root)
+    source_antelope_dir = antelope_dir
     if source_antelope_dir.exists():
         normalize_antelope_dir(source_antelope_dir)
 
