@@ -18,10 +18,7 @@ COMFY_LOG_PATH = "/tmp/comfyui.log"
 COMFY_PROCESS = None
 MODEL_ROOT_OVERRIDE = os.environ.get("MODEL_ROOT_OVERRIDE", "").strip()
 MODEL_ROOT_CANDIDATES = [
-    Path("/runpod-volume/ComfyUI/models"),
-    Path("/workspace/ComfyUI/models"),
-    Path("/runpod-volume/workspace/ComfyUI/models"),
-    Path("/runpod-volume/models"),
+    Path("/ComfyUI/models"),
 ]
 EXPECTED_MODEL_DIRS = ("unet", "clip", "vae", "pulid", "insightface", "checkpoints")
 EXPECTED_MODEL_FILES = {
@@ -313,7 +310,7 @@ def ensure_runtime_models():
     if source_antelope_dir.exists():
         mirror_antelope_variants(source_antelope_dir, model_root)
 
-    comfy_antelope_dir = Path("/ComfyUI/models/insightface/models/antelopev2")
+    comfy_antelope_dir = Path("/comfyui/models/insightface/models/antelopev2")
 
     diagnostics = {
         "model_root": str(model_root),
