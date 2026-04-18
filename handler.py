@@ -313,7 +313,7 @@ def ensure_runtime_models():
     if source_antelope_dir.exists():
         mirror_antelope_variants(source_antelope_dir, model_root)
 
-    comfy_antelope_dir = Path("/comfyui/models/insightface/models/antelopev2")
+    comfy_antelope_dir = Path("/ComfyUI/models/insightface/models/antelopev2")
 
     diagnostics = {
         "model_root": str(model_root),
