@@ -16,6 +16,7 @@ COMFY_DIR = "/comfyui"
 COMFY_INPUT_DIR = f"{COMFY_DIR}/input"
 COMFY_LOG_PATH = "/tmp/comfyui.log"
 COMFY_PROCESS = None
+ENABLE_INSIGHTFACE_PREFLIGHT = os.environ.get("ENABLE_INSIGHTFACE_PREFLIGHT", "").strip().lower() in ("1", "true", "yes")
 MODEL_ROOT_OVERRIDE = os.environ.get("MODEL_ROOT_OVERRIDE", "").strip()
 MODEL_ROOT_CANDIDATES = [
     Path("/runpod-volume/ComfyUI/models"),
@@ -223,7 +224,10 @@ def get_existing_valid_antelope_dir(model_root):
     return None
 
 
-def run_insightface_preflight():
+def run_insightface_preflight(model_root):
+    if not ENABLE_INSIGHTFACE_PREFLIGHT:
+        return [{"status": "disabled"}]
+
     diagnostics = []
     try:
         from insightface.app import FaceAnalysis
@@ -232,9 +236,7 @@ def run_insightface_preflight():
 
     candidate_roots = [
         Path("/comfyui/models/insightface"),
-        Path("/comfyui/models"),
-        Path("/runpod-volume/models/insightface"),
-        Path("/runpod-volume/models"),
+        model_root / "insightface",
     ]
 
     for root in candidate_roots:
@@ -341,7 +343,7 @@ def ensure_runtime_models():
         "comfy_antelope_files": sorted([p.name for p in comfy_antelope_dir.glob("*")]) if comfy_antelope_dir.exists() else [],
     }
     diagnostics.update(root_diagnostics)
-    diagnostics["insightface_preflight"] = run_insightface_preflight()
+    diagnostics["insightface_preflight"] = run_insightface_preflight(model_root)
     return diagnostics
 
 
