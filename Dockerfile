@@ -75,5 +75,7 @@ PY
 
 COPY input/lila_face_master_locked_v1.png /comfyui/input/lila_face_master_locked_v1.png
 COPY handler.py /handler.py
+COPY start-handler.sh /start-handler.sh
+RUN chmod +x /start-handler.sh
 
-CMD ["python3", "/handler.py"]
+CMD ["/start-handler.sh"]
