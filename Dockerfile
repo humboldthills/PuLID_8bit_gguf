@@ -30,6 +30,8 @@ text = path.read_text()
 
 if "from pathlib import Path" not in text:
     text = "from pathlib import Path\n" + text
+if "import os" not in text:
+    text = "import os\n" + text
 
 faceanalysis_pattern = re.compile(
     r"(?ms)^(?P<indent>\s*)model\s*=\s*FaceAnalysis\(name=\"antelopev2\", root=INSIGHTFACE_DIR, providers=\[provider \+ 'ExecutionProvider',\]\)\s*# alternative to buffalo_l\s*$"
@@ -39,7 +41,7 @@ if not match:
     raise SystemExit("expected FaceAnalysis constructor call not found")
 indent = match.group("indent")
 replacement = (
-    f"{indent}insightface_dir = Path(INSIGHTFACE_DIR)\n"
+    f"{indent}insightface_dir = Path(os.environ.get(\"INSIGHTFACE_ROOT\", INSIGHTFACE_DIR))\n"
     f"{indent}if insightface_dir.name == 'antelopev2':\n"
     f"{indent}    insightface_root = insightface_dir.parent.parent\n"
     f"{indent}elif insightface_dir.name == 'models':\n"
