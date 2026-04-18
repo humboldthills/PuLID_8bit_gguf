@@ -16,10 +16,11 @@ COMFY_DIR = "/comfyui"
 COMFY_INPUT_DIR = f"{COMFY_DIR}/input"
 COMFY_LOG_PATH = "/tmp/comfyui.log"
 COMFY_PROCESS = None
+MODEL_ROOT_OVERRIDE = os.environ.get("MODEL_ROOT_OVERRIDE", "").strip()
 MODEL_ROOT_CANDIDATES = [
-    Path("/runpod-volume/models"),
     Path("/runpod-volume/workspace/ComfyUI/models"),
     Path("/workspace/ComfyUI/models"),
+    Path("/runpod-volume/models"),
 ]
 EXPECTED_MODEL_FILES = {
     "UnetLoaderGGUF": {"unet_name": "flux1-dev-Q8_0.gguf", "filename": "flux1-dev-Q8_0.gguf"},
@@ -71,6 +72,11 @@ INSIGHTFACE_REQUIRED_DETECTORS = (
 
 
 def get_model_root():
+    if MODEL_ROOT_OVERRIDE:
+        override = Path(MODEL_ROOT_OVERRIDE)
+        override.mkdir(parents=True, exist_ok=True)
+        return override
+
     preferred = MODEL_ROOT_CANDIDATES[0]
     expected_dirs = ("unet", "clip", "vae", "pulid", "insightface", "checkpoints")
 
