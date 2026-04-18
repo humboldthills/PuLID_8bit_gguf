@@ -18,7 +18,10 @@ COMFY_LOG_PATH = "/tmp/comfyui.log"
 COMFY_PROCESS = None
 MODEL_ROOT_OVERRIDE = os.environ.get("MODEL_ROOT_OVERRIDE", "").strip()
 MODEL_ROOT_CANDIDATES = [
-    Path("/ComfyUI/models"),
+    Path("/runpod-volume/ComfyUI/models"),
+    Path("/workspace/ComfyUI/models"),
+    Path("/runpod-volume/workspace/ComfyUI/models"),
+    Path("/runpod-volume/models"),
 ]
 EXPECTED_MODEL_DIRS = ("unet", "clip", "vae", "pulid", "insightface", "checkpoints")
 EXPECTED_MODEL_FILES = {
