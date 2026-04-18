@@ -193,19 +193,19 @@ def antelope_dir_is_valid(path):
     return base_files_ok and detector_ok
 
 
-def mirror_antelope_variants(source_antelope_dir, model_root):
-    variant_targets = [
-        Path("/comfyui/models/insightface/models/antelopev2"),
-        Path("/comfyui/models/models/antelopev2"),
-        model_root / "insightface" / "models" / "antelopev2",
-        model_root / "models" / "antelopev2",
-    ]
+def normalize_antelope_dir(path):
+    nested = path / "antelopev2"
+    if not nested.exists() or not nested.is_dir():
+        return
 
-    resolved_source = source_antelope_dir.resolve()
-    for target in variant_targets:
-        if target.exists() and target.resolve() == resolved_source:
+    for item in nested.iterdir():
+        target = path / item.name
+        if target.exists():
             continue
-        mirror_model_dir(source_antelope_dir, target)
+        shutil.move(str(item), target)
+
+    if not any(nested.iterdir()):
+        nested.rmdir()
 
 
 def run_insightface_preflight():
@@ -288,11 +288,7 @@ def ensure_runtime_models():
             shutil.copytree(extracted_antelope, antelope_dir, dirs_exist_ok=False)
 
         antelope_dir = get_antelope_dir(insightface_root)
-        nested = antelope_dir / "antelopev2"
-        if nested.exists() and nested.is_dir():
-            for item in nested.iterdir():
-                shutil.move(str(item), antelope_dir / item.name)
-            nested.rmdir()
+        normalize_antelope_dir(antelope_dir)
 
         if not antelope_dir_is_valid(antelope_dir):
             raise RuntimeError(
@@ -300,6 +296,8 @@ def ensure_runtime_models():
                 f"Resolved dir: {antelope_dir}. Files: "
                 f"{sorted([p.name for p in antelope_dir.glob('*')]) if antelope_dir.exists() else []}"
             )
+    else:
+        normalize_antelope_dir(antelope_dir)
 
     pulid_source = model_root / "pulid"
     if pulid_source.exists():
@@ -311,7 +309,7 @@ def ensure_runtime_models():
 
     source_antelope_dir = get_antelope_dir(insightface_root)
     if source_antelope_dir.exists():
-        mirror_antelope_variants(source_antelope_dir, model_root)
+        normalize_antelope_dir(source_antelope_dir)
 
     comfy_antelope_dir = Path("/comfyui/models/insightface/models/antelopev2")
 
