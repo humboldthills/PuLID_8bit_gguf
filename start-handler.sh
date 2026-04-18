@@ -38,6 +38,10 @@ fi
 
 echo "Using model root: $MODEL_ROOT"
 export MODEL_ROOT_OVERRIDE="$MODEL_ROOT"
+if [ -d "$MODEL_ROOT/insightface" ]; then
+  export INSIGHTFACE_ROOT="$MODEL_ROOT/insightface"
+  echo "Using InsightFace root: $INSIGHTFACE_ROOT"
+fi
 
 mkdir -p /comfyui/models
 
