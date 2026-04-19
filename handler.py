@@ -25,6 +25,8 @@ MODEL_ROOT_CANDIDATES = [
     Path("/runpod-volume/models"),
 ]
 EXPECTED_MODEL_DIRS = ("unet", "clip", "vae", "pulid", "insightface", "checkpoints")
+RGTHREE_LORA_STACK_CLASS = "Lora Loader Stack (rgthree)"
+RGTHREE_LORA_LIMIT = 4
 EXPECTED_MODEL_FILES = {
     "UnetLoaderGGUF": {"unet_name": "flux1-dev-Q8_0.gguf", "filename": "flux1-dev-Q8_0.gguf"},
     "DualCLIPLoaderGGUF": {
@@ -448,6 +450,52 @@ def normalize_filename(value, candidates):
     return value
 
 
+def get_rgthree_lora_node(prompt):
+    for node in prompt.values():
+        if node.get("class_type") == RGTHREE_LORA_STACK_CLASS:
+            return node
+    return None
+
+
+def normalize_lora_item(item, lora_files):
+    if isinstance(item, str):
+        return normalize_filename(item, lora_files), 1.0
+
+    if isinstance(item, dict):
+        if item.get("enabled", True) is False:
+            return "None", 1.0
+        name = item.get("name") or item.get("lora") or item.get("filename") or "None"
+        strength = item.get("strength", item.get("weight", 1.0))
+        try:
+            strength = float(strength)
+        except (TypeError, ValueError):
+            strength = 1.0
+        return normalize_filename(name, lora_files), strength
+
+    return "None", 1.0
+
+
+def apply_lora_stack_overrides(prompt, available_files, job_input):
+    lora_node = get_rgthree_lora_node(prompt)
+    if not lora_node:
+        return
+
+    lora_files = available_files.get("loras", [])
+    provided_loras = job_input.get("loras", [])
+    normalized_loras = [
+        normalize_lora_item(item, lora_files)
+        for item in provided_loras[:RGTHREE_LORA_LIMIT]
+    ]
+
+    while len(normalized_loras) < RGTHREE_LORA_LIMIT:
+        normalized_loras.append(("None", 1.0))
+
+    inputs = lora_node.setdefault("inputs", {})
+    for index, (name, strength) in enumerate(normalized_loras, start=1):
+        inputs[f"lora_{index:02d}"] = name
+        inputs[f"strength_{index:02d}"] = strength
+
+
 def stage_input_images(job_input):
     os.makedirs(COMFY_INPUT_DIR, exist_ok=True)
 
@@ -507,6 +555,7 @@ def normalize_prompt_models(prompt, available_files):
     vae_files = available_files.get("vae", [])
     text_encoders = available_files.get("text_encoders", []) or available_files.get("clip", [])
     pulid_files = available_files.get("pulid", [])
+    lora_files = available_files.get("loras", [])
 
     for node in prompt.values():
         class_type = node.get("class_type")
@@ -536,6 +585,12 @@ def normalize_prompt_models(prompt, available_files):
                 if key in inputs:
                     inputs[key] = normalize_filename(inputs[key], pulid_files)
 
+        if class_type == RGTHREE_LORA_STACK_CLASS:
+            for index in range(1, RGTHREE_LORA_LIMIT + 1):
+                key = f"lora_{index:02d}"
+                if key in inputs:
+                    inputs[key] = normalize_filename(inputs[key], lora_files)
+
 
 def build_prompt(workflow, object_info):
     if workflow.get("prompt"):
@@ -545,11 +600,13 @@ def build_prompt(workflow, object_info):
     return workflow
 
 
-def run_workflow(workflow):
+def run_workflow(workflow, job_input=None):
     object_info = get_object_info()
     prompt = build_prompt(workflow, object_info)
+    available_files = coerce_available_files(get_available_files())
     try:
-        normalize_prompt_models(prompt, get_available_files())
+        normalize_prompt_models(prompt, available_files)
+        apply_lora_stack_overrides(prompt, available_files, job_input or {})
     except Exception as e:
         return {
             "error": "Failed to normalize model filenames",
@@ -665,7 +722,7 @@ def handler(job):
             "log_tail": read_log_tail(),
         }
 
-    result = run_workflow(workflow)
+    result = run_workflow(workflow, job_input)
     if "error" in result:
         return {
             "status": "error",
