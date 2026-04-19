@@ -11,6 +11,21 @@ CANDIDATES="
 EXPECTED_DIRS="unet clip vae pulid insightface checkpoints"
 SYNC_DIRS="unet clip vae pulid insightface checkpoints loras clip_vision configs controlnet embeddings upscale_models diffusion_models text_encoders"
 
+pick_rgthree_root() {
+  for candidate in \
+    "$MODEL_ROOT/../custom_nodes/rgthree-comfy" \
+    "/runpod-volume/ComfyUI/custom_nodes/rgthree-comfy" \
+    "/workspace/ComfyUI/custom_nodes/rgthree-comfy" \
+    "/runpod-volume/custom_nodes/rgthree-comfy"
+  do
+    if [ -d "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 pick_model_root() {
   for candidate in $CANDIDATES; do
     for name in $EXPECTED_DIRS; do
@@ -44,6 +59,7 @@ if [ -d "$MODEL_ROOT/insightface" ]; then
 fi
 
 mkdir -p /comfyui/models
+mkdir -p /comfyui/custom_nodes
 
 for name in $SYNC_DIRS; do
   src="$MODEL_ROOT/$name"
@@ -60,5 +76,17 @@ for name in $SYNC_DIRS; do
 
   ln -s "$src" "$dst"
 done
+
+RGTHREE_ROOT="$(pick_rgthree_root || true)"
+if [ -n "$RGTHREE_ROOT" ]; then
+  RGTHREE_DST="/comfyui/custom_nodes/rgthree-comfy"
+  if [ -L "$RGTHREE_DST" ] || [ -f "$RGTHREE_DST" ]; then
+    rm -f "$RGTHREE_DST"
+  elif [ -d "$RGTHREE_DST" ]; then
+    rm -rf "$RGTHREE_DST"
+  fi
+  ln -s "$RGTHREE_ROOT" "$RGTHREE_DST"
+  echo "Using rgthree custom nodes: $RGTHREE_ROOT"
+fi
 
 exec python3 /handler.py
